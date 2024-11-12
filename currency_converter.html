@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Currency Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f4f4f4;
+        }
+        table {
+            border-collapse: collapse;
+            margin: 20px;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        th, td {
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        input {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <div>
+        <h2>Multi-Currency Converter</h2>
+        <table>
+            <tr>
+                <th>USD</th>
+                <th>Chinese RMB</th>
+                <th>Japanese Yen</th>
+            </tr>
+            <tr>
+                <td><input type="number" id="usd" placeholder="Enter USD" oninput="convertCurrency('USD')"></td>
+                <td><input type="number" id="rmb" placeholder="Enter RMB" oninput="convertCurrency('CNY')"></td>
+                <td><input type="number" id="yen" placeholder="Enter Yen" oninput="convertCurrency('JPY')"></td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+        async function fetchRates() {
+            const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+            const data = await response.json();
+            return data.rates;
+        }
+
+        let rates = {};
+
+        async function convertCurrency(currency) {
+            if (Object.keys(rates).length === 0) {
+                rates = await fetchRates();
+            }
+
+            const usdInput = document.getElementById('usd');
+            const rmbInput = document.getElementById('rmb');
+            const yenInput = document.getElementById('yen');
+
+            if (currency === 'USD') {
+                const usdValue = parseFloat(usdInput.value) || 0;
+                rmbInput.value = (usdValue * rates.CNY).toFixed(2);
+                yenInput.value = (usdValue * rates.JPY).toFixed(2);
+            } else if (currency === 'CNY') {
+                const rmbValue = parseFloat(rmbInput.value) || 0;
+                usdInput.value = (rmbValue / rates.CNY).toFixed(2);
+                yenInput.value = (rmbValue * (rates.JPY / rates.CNY)).toFixed(2);
+            } else if (currency === 'JPY') {
+                const yenValue = parseFloat(yenInput.value) || 0;
+                usdInput.value = (yenValue / rates.JPY).toFixed(2);
+                rmbInput.value = (yenValue * (rates.CNY / rates.JPY)).toFixed(2);
+            }
+        }
+    </script>
+
+</body>
+</html>
+
