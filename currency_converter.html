@@ -35,24 +35,55 @@
             border: 1px solid #ccc;
             border-radius: 4px;
         }
+        .saved-row {
+            background-color: #f0f0f0;
+        }
+        .save-btn {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        .save-btn:hover {
+            background-color: #45a049;
+        }
+        .table-container {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.12.0/math.js"></script>
 </head>
 <body>
 
     <div>
         <h2>Multi-Currency Converter</h2>
-        <table>
-            <tr>
-                <th>USD</th>
-                <th>Chinese RMB</th>
-                <th>Japanese Yen</th>
-            </tr>
-            <tr>
-                <td><input type="number" id="usd" placeholder="Enter USD" oninput="convertCurrency('USD')"></td>
-                <td><input type="number" id="rmb" placeholder="Enter RMB" oninput="convertCurrency('CNY')"></td>
-                <td><input type="number" id="yen" placeholder="Enter Yen" oninput="convertCurrency('JPY')"></td>
-            </tr>
-        </table>
+        <div id="calculationResult" style="color: red; text-align: center; margin-bottom: 10px; min-height: 20px;"></div>
+        <div class="table-container">
+            <table id="conversionTable">
+                <thead>
+                    <tr>
+                        <th>USD</th>
+                        <th>Chinese RMB</th>
+                        <th>Hong Kong Dollar</th>
+                        <th>Japanese Yen</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="inputRow">
+                        <td><input type="text" id="usd" placeholder="Enter USD" oninput="convertCurrency('USD')"></td>
+                        <td><input type="text" id="rmb" placeholder="Enter RMB" oninput="convertCurrency('CNY')"></td>
+                        <td><input type="text" id="hkd" placeholder="Enter HKD" oninput="convertCurrency('HKD')"></td>
+                        <td><input type="text" id="yen" placeholder="Enter Yen" oninput="convertCurrency('JPY')"></td>
+                        <td><button class="save-btn" onclick="saveCurrentConversion()">Save</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -71,21 +102,96 @@
 
             const usdInput = document.getElementById('usd');
             const rmbInput = document.getElementById('rmb');
+            const hkdInput = document.getElementById('hkd');
             const yenInput = document.getElementById('yen');
+            const resultDisplay = document.getElementById('calculationResult');
+
+            let sourceValue;
+            let sourceInput;
+
+            if (currency === 'USD') sourceInput = usdInput;
+            else if (currency === 'CNY') sourceInput = rmbInput;
+            else if (currency === 'HKD') sourceInput = hkdInput;
+            else if (currency === 'JPY') sourceInput = yenInput;
+
+            try {
+                sourceValue = math.evaluate(sourceInput.value);
+                
+                const currencySymbols = {
+                    'USD': '$',
+                    'CNY': '¥',
+                    'HKD': 'HK$',
+                    'JPY': '¥'
+                };
+                
+                if (sourceInput.value.match(/[+\-*/]/)) {
+                    resultDisplay.textContent = `${sourceInput.value} = ${currencySymbols[currency]}${sourceValue.toFixed(2)} ${currency}`;
+                } else {
+                    resultDisplay.textContent = '';
+                }
+            } catch (e) {
+                resultDisplay.textContent = "Invalid expression";
+                return;
+            }
 
             if (currency === 'USD') {
-                const usdValue = parseFloat(usdInput.value) || 0;
-                rmbInput.value = (usdValue * rates.CNY).toFixed(2);
-                yenInput.value = (usdValue * rates.JPY).toFixed(2);
+                rmbInput.value = (sourceValue * rates.CNY).toFixed(2);
+                hkdInput.value = (sourceValue * rates.HKD).toFixed(2);
+                yenInput.value = (sourceValue * rates.JPY).toFixed(2);
             } else if (currency === 'CNY') {
-                const rmbValue = parseFloat(rmbInput.value) || 0;
-                usdInput.value = (rmbValue / rates.CNY).toFixed(2);
-                yenInput.value = (rmbValue * (rates.JPY / rates.CNY)).toFixed(2);
+                usdInput.value = (sourceValue / rates.CNY).toFixed(2);
+                hkdInput.value = (sourceValue * (rates.HKD / rates.CNY)).toFixed(2);
+                yenInput.value = (sourceValue * (rates.JPY / rates.CNY)).toFixed(2);
+            } else if (currency === 'HKD') {
+                usdInput.value = (sourceValue / rates.HKD).toFixed(2);
+                rmbInput.value = (sourceValue * (rates.CNY / rates.HKD)).toFixed(2);
+                yenInput.value = (sourceValue * (rates.JPY / rates.HKD)).toFixed(2);
             } else if (currency === 'JPY') {
-                const yenValue = parseFloat(yenInput.value) || 0;
-                usdInput.value = (yenValue / rates.JPY).toFixed(2);
-                rmbInput.value = (yenValue * (rates.CNY / rates.JPY)).toFixed(2);
+                usdInput.value = (sourceValue / rates.JPY).toFixed(2);
+                rmbInput.value = (sourceValue * (rates.CNY / rates.JPY)).toFixed(2);
+                hkdInput.value = (sourceValue * (rates.HKD / rates.JPY)).toFixed(2);
             }
+        }
+
+        function saveCurrentConversion() {
+            const usdValue = document.getElementById('usd').value;
+            const rmbValue = document.getElementById('rmb').value;
+            const hkdValue = document.getElementById('hkd').value;
+            const yenValue = document.getElementById('yen').value;
+
+            if (!usdValue && !rmbValue && !hkdValue && !yenValue) {
+                return; // Don't save empty rows
+            }
+
+            const table = document.getElementById('conversionTable').getElementsByTagName('tbody')[0];
+            const newRow = table.insertRow(table.rows.length - 1);
+            newRow.className = 'saved-row';
+
+            const values = [usdValue, rmbValue, hkdValue, yenValue];
+            values.forEach(value => {
+                const cell = newRow.insertCell();
+                try {
+                    // Check if the value contains any mathematical operators
+                    if (value.match(/[+\-*/]/)) {
+                        const result = math.evaluate(value);
+                        cell.textContent = result.toFixed(2);
+                    } else {
+                        cell.textContent = value;
+                    }
+                } catch (e) {
+                    cell.textContent = value; // If evaluation fails, use original value
+                }
+            });
+
+            // Add empty cell for consistency with column count
+            newRow.insertCell();
+
+            // Clear input fields
+            document.getElementById('usd').value = '';
+            document.getElementById('rmb').value = '';
+            document.getElementById('hkd').value = '';
+            document.getElementById('yen').value = '';
+            document.getElementById('calculationResult').textContent = '';
         }
     </script>
 
