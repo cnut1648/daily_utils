@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multi-Currency Converter</title>
     <style>
+        /* Base styles */
         body {
             font-family: Arial, sans-serif;
             display: flex;
@@ -13,21 +14,39 @@
             height: 100vh;
             background-color: #f4f4f4;
         }
+        
+        .main-container {
+            width: 100%;
+            max-width: 900px;
+        }
+        
+        /* Tables */
         table {
             border-collapse: collapse;
-            margin: 20px;
+            margin: 20px 0;
             background-color: white;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
         }
+        
         th, td {
             padding: 15px;
             text-align: center;
             border: 1px solid #ddd;
         }
+        
         th {
             background-color: #4CAF50;
             color: white;
         }
+        
+        .table-container {
+            max-height: 70vh;
+            overflow-y: auto;
+            width: 100%;
+        }
+        
+        /* Form elements */
         input {
             width: 80%;
             padding: 10px;
@@ -35,9 +54,7 @@
             border: 1px solid #ccc;
             border-radius: 4px;
         }
-        .saved-row {
-            background-color: #f0f0f0;
-        }
+        
         .save-btn {
             padding: 8px 15px;
             background-color: #4CAF50;
@@ -47,154 +64,666 @@
             cursor: pointer;
             margin: 10px 0;
         }
+        
         .save-btn:hover {
             background-color: #45a049;
         }
-        .table-container {
-            max-height: 70vh;
-            overflow-y: auto;
+        
+        /* Tab styles */
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 4px 4px 0 0;
+        }
+        
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 17px;
+        }
+        
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        
+        .tab button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .tabcontent {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            background-color: white;
+            border-radius: 0 0 4px 4px;
+            animation: fadeEffect 1s;
+        }
+        
+        @keyframes fadeEffect {
+            from {opacity: 0;}
+            to {opacity: 1;}
+        }
+        
+        /* TOM Calculator styles */
+        .config-container {
+            margin-bottom: 20px;
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .formula-display {
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+            font-family: monospace;
+        }
+        
+        .saved-row {
+            background-color: #f0f0f0;
+        }
+        
+        .in-stock-row td {
+            background-color: #e8f5e9;
+        }
+        
+        .pre-order-row td {
+            background-color: #fff8e1;
+        }
+        
+        .editable-value {
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        
+        .editable-value:hover {
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.12.0/math.js"></script>
 </head>
 <body>
-
-    <div>
-        <h2>Multi-Currency Converter</h2>
-        <div id="calculationResult" style="color: red; text-align: center; margin-bottom: 10px; min-height: 20px;"></div>
-        <div class="table-container">
-            <table id="conversionTable">
-                <thead>
-                    <tr>
-                        <th>USD</th>
-                        <th>Chinese RMB</th>
-                        <th>Hong Kong Dollar</th>
-                        <th>Japanese Yen</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr id="inputRow">
-                        <td><input type="text" id="usd" placeholder="Enter USD" oninput="convertCurrency('USD')"></td>
-                        <td><input type="text" id="rmb" placeholder="Enter RMB" oninput="convertCurrency('CNY')"></td>
-                        <td><input type="text" id="hkd" placeholder="Enter HKD" oninput="convertCurrency('HKD')"></td>
-                        <td><input type="text" id="yen" placeholder="Enter Yen" oninput="convertCurrency('JPY')"></td>
-                        <td><button class="save-btn" onclick="saveCurrentConversion()">Save</button></td>
-                    </tr>
-                </tbody>
-            </table>
+    <div class="main-container">
+        <!-- Tab Navigation -->
+        <div class="tab">
+            <button class="tablinks active" onclick="openTab(event, 'currencyConverter')">Currency Converter</button>
+            <button class="tablinks" onclick="openTab(event, 'tomCalculator')">TOM Calculator</button>
+        </div>
+        
+        <!-- Currency Converter Tab -->
+        <div id="currencyConverter" class="tabcontent" style="display: block;">
+            <h2>Multi-Currency Converter</h2>
+            
+            <!-- New Exchange Rate Configuration Table -->
+            <div class="config-container">
+                <h3>Current Exchange Rates <small>(click to edit)</small></h3>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <div>1 USD =</div>
+                    <button class="save-btn" onclick="resetToAPIRates()">Reset to API Rates</button>
+                </div>
+                <table id="ratesTable" style="max-width: 600px; margin: 0 auto;">
+                    <thead>
+                        <tr>
+                            <th>Chinese RMB (CNY)</th>
+                            <th>Hong Kong Dollar (HKD)</th>
+                            <th>Japanese Yen (JPY)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="editable-rate" data-currency="CNY">Loading...</span></td>
+                            <td><span class="editable-rate" data-currency="HKD">Loading...</span></td>
+                            <td><span class="editable-rate" data-currency="JPY">Loading...</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="calculationResult" style="color: red; text-align: center; margin-bottom: 10px; min-height: 20px;"></div>
+            
+            <div class="table-container">
+                <table id="conversionTable">
+                    <thead>
+                        <tr>
+                            <th>USD</th>
+                            <th>Chinese RMB</th>
+                            <th>Hong Kong Dollar</th>
+                            <th>Japanese Yen</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="inputRow">
+                            <td><input type="text" id="usd" placeholder="Enter USD" oninput="convertCurrency('USD')"></td>
+                            <td><input type="text" id="rmb" placeholder="Enter RMB" oninput="convertCurrency('CNY')"></td>
+                            <td><input type="text" id="hkd" placeholder="Enter HKD" oninput="convertCurrency('HKD')"></td>
+                            <td><input type="text" id="yen" placeholder="Enter Yen" oninput="convertCurrency('JPY')"></td>
+                            <td><button class="save-btn" onclick="saveCurrentConversion()">Save</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- TOM Calculator Tab -->
+        <div id="tomCalculator" class="tabcontent">
+            <h2>TOM Calculator</h2>
+            
+            <div class="config-container">
+                <h3>Configuration</h3>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                    <div>
+                        <label>CC Cashback:</label>
+                        <input type="number" id="ccCashback" value="5.25" min="0" max="100" step="0.01" style="width: 80px;" oninput="calculateTOMPrices()"> %
+                    </div>
+                    <div>
+                        <label>TOM Cashback (This Product):</label>
+                        <input type="number" id="tomCashbackThis" value="25" min="0" max="100" step="0.01" style="width: 80px;" oninput="calculateTOMPrices()"> %
+                    </div>
+                    <div>
+                        <label>TOM Cashback (Future Product):</label>
+                        <input type="number" id="tomCashbackFuture" value="25" min="0" max="100" step="0.01" style="width: 80px;" oninput="calculateTOMPrices()"> %
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <label for="tomUsd"><strong>Product Price (USD):</strong></label>
+                <input type="text" id="tomUsd" placeholder="Enter USD" style="width: 200px;" oninput="calculateTOMPrices()">
+                <div id="tomCalculationResult" style="color: red; display: inline-block; margin-left: 10px;"></div>
+            </div>
+            
+            <div class="formula-display">
+                <h3>Formulas</h3>
+                <div id="inStockFormulaContainer">
+                    <strong>IN Stock:</strong> 
+                    <span id="priceValue" class="editable-value" style="color: #2ecc71; font-weight: bold;">$0.00</span> × 
+                    (1 - <span id="ccCashbackValue" class="editable-value" style="color: #e74c3c; font-weight: bold;">5.25%</span> - 
+                    <span id="tomThisValue" class="editable-value" style="color: #3498db; font-weight: bold;">25.00%</span>)
+                    = <span id="inStockResult">$0.00</span>
+                </div>
+                <div id="preOrderFormulaContainer" style="margin-top: 10px;">
+                    <strong>Pre Order:</strong> 
+                    <span class="priceValue editable-value" style="color: #2ecc71; font-weight: bold;">$0.00</span> × 
+                    (1 - <span class="ccCashbackValue editable-value" style="color: #e74c3c; font-weight: bold;">5.25%</span> - 
+                    <span class="tomThisValue editable-value" style="color: #3498db; font-weight: bold;">25.00%</span> × 
+                    (1 - <span id="tomFutureValue" class="editable-value" style="color: #9b59b6; font-weight: bold;">25.00%</span>))
+                    = <span id="preOrderResult">$0.00</span>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table id="tomCalculatorTable">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>USD</th>
+                            <th>Chinese RMB</th>
+                            <th>Hong Kong Dollar</th>
+                            <th>Japanese Yen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="inStockRow" class="in-stock-row">
+                            <td>IN Stock</td>
+                            <td id="inStockUsd">-</td>
+                            <td id="inStockRmb">-</td>
+                            <td id="inStockHkd">-</td>
+                            <td id="inStockYen">-</td>
+                        </tr>
+                        <tr id="preOrderRow" class="pre-order-row">
+                            <td>Pre Order</td>
+                            <td id="preOrderUsd">-</td>
+                            <td id="preOrderRmb">-</td>
+                            <td id="preOrderHkd">-</td>
+                            <td id="preOrderYen">-</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
-        async function fetchRates() {
-            const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-            const data = await response.json();
-            return data.rates;
+        // Global variables
+        const CURRENCY_SYMBOLS = {
+            'USD': '$',
+            'CNY': '¥',
+            'HKD': 'HK$',
+            'JPY': '¥'
+        };
+        
+        let rates = {};
+        let manualRates = {};
+        let usingManualRates = false;
+        
+        // Tab functionality
+        function openTab(evt, tabName) {
+            document.querySelectorAll('.tabcontent').forEach(tab => tab.style.display = 'none');
+            document.querySelectorAll('.tablinks').forEach(link => link.classList.remove('active'));
+            
+            document.getElementById(tabName).style.display = 'block';
+            evt.currentTarget.classList.add('active');
         }
 
-        let rates = {};
+        // Exchange rate API
+        async function fetchRates() {
+            try {
+                const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+                const data = await response.json();
+                rates = data.rates;
+                updateRatesDisplay();
+                return data.rates;
+            } catch (error) {
+                console.error('Error fetching exchange rates:', error);
+                document.getElementById('calculationResult').textContent = "Error fetching exchange rates. Using default values.";
+                rates = { 'CNY': 7.2, 'HKD': 7.8, 'JPY': 150.0 };
+                updateRatesDisplay();
+                return rates;
+            }
+        }
+        
+        // Update the display of current rates
+        function updateRatesDisplay() {
+            const displayRates = usingManualRates ? manualRates : rates;
+            
+            document.querySelectorAll('.editable-rate').forEach(el => {
+                const currency = el.getAttribute('data-currency');
+                if (displayRates[currency]) {
+                    el.textContent = displayRates[currency].toFixed(4);
+                }
+            });
+        }
+        
+        // Reset to API rates
+        function resetToAPIRates() {
+            usingManualRates = false;
+            updateRatesDisplay();
+            document.getElementById('calculationResult').textContent = "Reset to API exchange rates.";
+            
+            // Recalculate with current input if any
+            const activeInput = ['usd', 'rmb', 'hkd', 'yen'].find(id => document.getElementById(id).value);
+            if (activeInput) {
+                const currencyMap = {
+                    'usd': 'USD',
+                    'rmb': 'CNY',
+                    'hkd': 'HKD',
+                    'yen': 'JPY'
+                };
+                convertCurrency(currencyMap[activeInput]);
+            }
+        }
+        
+        // Setup editable rates
+        function setupEditableRates() {
+            document.querySelectorAll('.editable-rate').forEach(el => {
+                el.addEventListener('click', function() {
+                    const currency = this.getAttribute('data-currency');
+                    const currentValue = usingManualRates && manualRates[currency] ? 
+                        manualRates[currency] : rates[currency];
+                    
+                    const tempInput = document.createElement('input');
+                    tempInput.type = 'number';
+                    tempInput.step = '0.0001';
+                    tempInput.min = '0';
+                    tempInput.value = currentValue.toFixed(4);
+                    tempInput.style.width = '80px';
+                    tempInput.style.padding = '2px';
+                    
+                    this.parentNode.replaceChild(tempInput, this);
+                    tempInput.focus();
+                    
+                    // Handle blur and enter key
+                    tempInput.addEventListener('blur', () => updateRateFromInput(tempInput, el, currency));
+                    tempInput.addEventListener('keydown', e => {
+                        if (e.key === 'Enter') {
+                            updateRateFromInput(tempInput, el, currency);
+                        }
+                    });
+                });
+            });
+        }
+        
+        function updateRateFromInput(input, originalEl, currency) {
+            const newRate = parseFloat(input.value);
+            if (!isNaN(newRate) && newRate > 0) {
+                if (!usingManualRates) {
+                    // First time editing, initialize manual rates from API rates
+                    manualRates = {...rates};
+                    usingManualRates = true;
+                }
+                
+                manualRates[currency] = newRate;
+                originalEl.textContent = newRate.toFixed(4);
+                
+                document.getElementById('calculationResult').textContent = 
+                    `Updated ${currency} rate to ${newRate.toFixed(4)}. Using manual rates.`;
+                
+                // Recalculate if needed
+                const activeInput = ['usd', 'rmb', 'hkd', 'yen'].find(id => document.getElementById(id).value);
+                if (activeInput) {
+                    const currencyMap = {
+                        'usd': 'USD',
+                        'rmb': 'CNY',
+                        'hkd': 'HKD',
+                        'yen': 'JPY'
+                    };
+                    convertCurrency(currencyMap[activeInput]);
+                }
+            } else {
+                originalEl.textContent = (usingManualRates && manualRates[currency] ? 
+                    manualRates[currency] : rates[currency]).toFixed(4);
+                document.getElementById('calculationResult').textContent = "Invalid rate entered.";
+            }
+            
+            input.parentNode.replaceChild(originalEl, input);
+        }
 
+        // Currency converter functions
         async function convertCurrency(currency) {
             if (Object.keys(rates).length === 0) {
-                rates = await fetchRates();
+                await fetchRates();
             }
 
-            const usdInput = document.getElementById('usd');
-            const rmbInput = document.getElementById('rmb');
-            const hkdInput = document.getElementById('hkd');
-            const yenInput = document.getElementById('yen');
+            const inputs = {
+                'USD': document.getElementById('usd'),
+                'CNY': document.getElementById('rmb'),
+                'HKD': document.getElementById('hkd'),
+                'JPY': document.getElementById('yen')
+            };
+            
             const resultDisplay = document.getElementById('calculationResult');
-
-            let sourceValue;
-            let sourceInput;
-
-            if (currency === 'USD') sourceInput = usdInput;
-            else if (currency === 'CNY') sourceInput = rmbInput;
-            else if (currency === 'HKD') sourceInput = hkdInput;
-            else if (currency === 'JPY') sourceInput = yenInput;
+            const sourceInput = inputs[currency];
+            const currentRates = usingManualRates ? manualRates : rates;
 
             try {
-                sourceValue = math.evaluate(sourceInput.value);
+                // Parse and evaluate the input value
+                const sourceValue = math.evaluate(sourceInput.value.replace(/,/g, ''));
                 
-                const currencySymbols = {
-                    'USD': '$',
-                    'CNY': '¥',
-                    'HKD': 'HK$',
-                    'JPY': '¥'
-                };
+                if (isNaN(sourceValue)) {
+                    throw new Error('Invalid number');
+                }
                 
+                // Show calculation result if it's an expression
                 if (sourceInput.value.match(/[+\-*/]/)) {
-                    resultDisplay.textContent = `${sourceInput.value} = ${currencySymbols[currency]}${sourceValue.toFixed(2)} ${currency}`;
+                    resultDisplay.textContent = `${sourceInput.value} = ${CURRENCY_SYMBOLS[currency]}${sourceValue.toFixed(2)} ${currency}`;
                 } else {
                     resultDisplay.textContent = '';
                 }
+                
+                // Convert to all other currencies
+                Object.keys(inputs).forEach(targetCurrency => {
+                    if (targetCurrency === currency) return;
+                    
+                    const convertedValue = currency === 'USD' 
+                        ? sourceValue * currentRates[targetCurrency]
+                        : targetCurrency === 'USD'
+                            ? sourceValue / currentRates[currency]
+                            : sourceValue * (currentRates[targetCurrency] / currentRates[currency]);
+                            
+                    inputs[targetCurrency].value = convertedValue.toFixed(2);
+                });
+                
             } catch (e) {
                 resultDisplay.textContent = "Invalid expression";
-                return;
-            }
-
-            if (currency === 'USD') {
-                rmbInput.value = (sourceValue * rates.CNY).toFixed(2);
-                hkdInput.value = (sourceValue * rates.HKD).toFixed(2);
-                yenInput.value = (sourceValue * rates.JPY).toFixed(2);
-            } else if (currency === 'CNY') {
-                usdInput.value = (sourceValue / rates.CNY).toFixed(2);
-                hkdInput.value = (sourceValue * (rates.HKD / rates.CNY)).toFixed(2);
-                yenInput.value = (sourceValue * (rates.JPY / rates.CNY)).toFixed(2);
-            } else if (currency === 'HKD') {
-                usdInput.value = (sourceValue / rates.HKD).toFixed(2);
-                rmbInput.value = (sourceValue * (rates.CNY / rates.HKD)).toFixed(2);
-                yenInput.value = (sourceValue * (rates.JPY / rates.HKD)).toFixed(2);
-            } else if (currency === 'JPY') {
-                usdInput.value = (sourceValue / rates.JPY).toFixed(2);
-                rmbInput.value = (sourceValue * (rates.CNY / rates.JPY)).toFixed(2);
-                hkdInput.value = (sourceValue * (rates.HKD / rates.JPY)).toFixed(2);
             }
         }
 
         function saveCurrentConversion() {
-            const usdValue = document.getElementById('usd').value;
-            const rmbValue = document.getElementById('rmb').value;
-            const hkdValue = document.getElementById('hkd').value;
-            const yenValue = document.getElementById('yen').value;
+            const inputs = {
+                'usd': document.getElementById('usd').value,
+                'rmb': document.getElementById('rmb').value,
+                'hkd': document.getElementById('hkd').value,
+                'yen': document.getElementById('yen').value
+            };
 
-            if (!usdValue && !rmbValue && !hkdValue && !yenValue) {
-                return; // Don't save empty rows
-            }
+            // Don't save if all fields are empty
+            if (Object.values(inputs).every(value => !value)) return;
 
+            // Create a new row
             const table = document.getElementById('conversionTable').getElementsByTagName('tbody')[0];
             const newRow = table.insertRow(table.rows.length - 1);
             newRow.className = 'saved-row';
 
-            const values = [usdValue, rmbValue, hkdValue, yenValue];
-            values.forEach(value => {
+            // Add cells with evaluated values
+            ['usd', 'rmb', 'hkd', 'yen'].forEach(field => {
                 const cell = newRow.insertCell();
                 try {
-                    // Check if the value contains any mathematical operators
-                    if (value.match(/[+\-*/]/)) {
-                        const result = math.evaluate(value);
+                    if (inputs[field].match(/[+\-*/]/)) {
+                        const result = math.evaluate(inputs[field].replace(/,/g, ''));
                         cell.textContent = result.toFixed(2);
                     } else {
-                        cell.textContent = value;
+                        cell.textContent = inputs[field];
                     }
                 } catch (e) {
-                    cell.textContent = value; // If evaluation fails, use original value
+                    cell.textContent = inputs[field]; // Use original if evaluation fails
                 }
             });
 
-            // Add empty cell for consistency with column count
+            // Add empty cell for action column
             newRow.insertCell();
 
-            // Clear input fields
-            document.getElementById('usd').value = '';
-            document.getElementById('rmb').value = '';
-            document.getElementById('hkd').value = '';
-            document.getElementById('yen').value = '';
+            // Clear input fields and result display
+            ['usd', 'rmb', 'hkd', 'yen'].forEach(id => document.getElementById(id).value = '');
             document.getElementById('calculationResult').textContent = '';
         }
-    </script>
 
+        // TOM Calculator Functions
+        function calculateTOMPrices() {
+            if (Object.keys(rates).length === 0) {
+                fetchRates().then(r => {
+                    performTOMCalculation();
+                });
+            } else {
+                performTOMCalculation();
+            }
+        }
+
+        function performTOMCalculation() {
+            const tomUsdInput = document.getElementById('tomUsd');
+            const resultDisplay = document.getElementById('tomCalculationResult');
+            const currentRates = usingManualRates ? manualRates : rates;
+            
+            try {
+                // Get configuration values
+                const ccCashback = parseFloat(document.getElementById('ccCashback').value) / 100;
+                const tomCashbackThis = parseFloat(document.getElementById('tomCashbackThis').value) / 100;
+                const tomCashbackFuture = parseFloat(document.getElementById('tomCashbackFuture').value) / 100;
+                
+                // Get and evaluate product price
+                let productPrice = 0;
+                if (tomUsdInput.value) {
+                    productPrice = math.evaluate(tomUsdInput.value.replace(/,/g, ''));
+                }
+                
+                if (isNaN(productPrice)) {
+                    throw new Error('Invalid product price');
+                }
+                
+                // Calculate prices
+                const preOrderPrice = productPrice * (1 - ccCashback - (tomCashbackThis * (1 - tomCashbackFuture)));
+                const inStockPrice = productPrice * (1 - ccCashback - tomCashbackThis);
+                
+                // Update the results table with current rates
+                updateTOMResultsTable(inStockPrice, preOrderPrice, currentRates);
+                
+                // Show calculation if input is an expression
+                if (tomUsdInput.value.match(/[+\-*/]/)) {
+                    resultDisplay.textContent = `${tomUsdInput.value} = $${productPrice.toFixed(2)} USD`;
+                } else {
+                    resultDisplay.textContent = '';
+                }
+                
+                // Update the formula display
+                updateFormulaDisplay(productPrice, ccCashback, tomCashbackThis, tomCashbackFuture, inStockPrice, preOrderPrice);
+                
+            } catch (e) {
+                resultDisplay.textContent = "Invalid expression";
+            }
+        }
+        
+        function updateTOMResultsTable(inStockPrice, preOrderPrice, currentRates) {
+            // Update USD values
+            document.getElementById('inStockUsd').textContent = '$' + inStockPrice.toFixed(2);
+            document.getElementById('preOrderUsd').textContent = '$' + preOrderPrice.toFixed(2);
+            
+            // Update other currencies
+            const currencies = [
+                { code: 'CNY', prefix: '¥', elements: ['inStockRmb', 'preOrderRmb'] },
+                { code: 'HKD', prefix: 'HK$', elements: ['inStockHkd', 'preOrderHkd'] },
+                { code: 'JPY', prefix: '¥', elements: ['inStockYen', 'preOrderYen'] }
+            ];
+            
+            currencies.forEach(currency => {
+                document.getElementById(currency.elements[0]).textContent = 
+                    currency.prefix + (inStockPrice * currentRates[currency.code]).toFixed(2);
+                document.getElementById(currency.elements[1]).textContent = 
+                    currency.prefix + (preOrderPrice * currentRates[currency.code]).toFixed(2);
+            });
+        }
+        
+        function updateFormulaDisplay(price, ccCashback, tomCashbackThis, tomCashbackFuture, inStockPrice, preOrderPrice) {
+            // Update price displays
+            document.getElementById('priceValue').textContent = '$' + price.toFixed(2);
+            document.querySelectorAll('.priceValue').forEach(el => {
+                el.textContent = '$' + price.toFixed(2);
+            });
+            
+            // Update cashback percentages
+            document.getElementById('ccCashbackValue').textContent = (ccCashback * 100).toFixed(2) + '%';
+            document.querySelectorAll('.ccCashbackValue').forEach(el => {
+                el.textContent = (ccCashback * 100).toFixed(2) + '%';
+            });
+            
+            document.getElementById('tomThisValue').textContent = (tomCashbackThis * 100).toFixed(2) + '%';
+            document.querySelectorAll('.tomThisValue').forEach(el => {
+                el.textContent = (tomCashbackThis * 100).toFixed(2) + '%';
+            });
+            
+            document.getElementById('tomFutureValue').textContent = (tomCashbackFuture * 100).toFixed(2) + '%';
+            
+            // Update formula results
+            document.getElementById('inStockResult').textContent = '$' + inStockPrice.toFixed(2);
+            document.getElementById('preOrderResult').textContent = '$' + preOrderPrice.toFixed(2);
+        }
+        
+        // Editable values in formulas
+        function setupEditableValue(spanId, inputId) {
+            const span = document.getElementById(spanId);
+            
+            span.addEventListener('click', function() {
+                const value = span.textContent.replace(/[^0-9.]/g, '');
+                const tempInput = document.createElement('input');
+                tempInput.type = spanId === 'priceValue' ? 'text' : 'number';
+                tempInput.value = value;
+                tempInput.style.width = '80px';
+                tempInput.style.padding = '2px';
+                tempInput.style.border = '1px solid #ccc';
+                tempInput.style.borderRadius = '3px';
+                tempInput.style.fontSize = '14px';
+                tempInput.style.fontFamily = 'monospace';
+                
+                // If percentage input, add attributes
+                if (spanId !== 'priceValue') {
+                    tempInput.min = '0';
+                    tempInput.max = '100';
+                    tempInput.step = '0.01';
+                }
+                
+                span.parentNode.replaceChild(tempInput, span);
+                tempInput.focus();
+                
+                // Set up blur and enter key handlers
+                tempInput.addEventListener('blur', () => updateValueFromTempInput(tempInput, span, inputId));
+                tempInput.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') {
+                        updateValueFromTempInput(tempInput, span, inputId);
+                    }
+                });
+            });
+        }
+        
+        function updateValueFromTempInput(tempInput, originalSpan, inputId) {
+            try {
+                const value = tempInput.type === 'text' ? 
+                    math.evaluate(tempInput.value.replace(/,/g, '')) : 
+                    parseFloat(tempInput.value);
+                
+                if (isNaN(value)) {
+                    throw new Error('Invalid number');
+                }
+                
+                // Update the corresponding input in the config section
+                document.getElementById(inputId).value = value;
+                
+                // Format display based on input type
+                if (inputId === 'tomUsd') {
+                    originalSpan.textContent = '$' + value.toFixed(2);
+                    document.querySelectorAll('.priceValue').forEach(el => {
+                        el.textContent = '$' + value.toFixed(2);
+                    });
+                } else {
+                    originalSpan.textContent = value.toFixed(2) + '%';
+                    const className = inputId === 'ccCashback' ? 'ccCashbackValue' : 
+                        (inputId === 'tomCashbackThis' ? 'tomThisValue' : 'tomFutureValue');
+                    document.querySelectorAll('.' + className).forEach(el => {
+                        el.textContent = value.toFixed(2) + '%';
+                    });
+                }
+                
+                // Recalculate prices
+                calculateTOMPrices();
+            } catch (e) {
+                console.error("Invalid input:", e);
+            }
+            
+            tempInput.parentNode.replaceChild(originalSpan, tempInput);
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize exchange rates
+            fetchRates();
+            
+            // Set up editable rates
+            setupEditableRates();
+            
+            // Set up editable values in formulas
+            setupEditableValue('priceValue', 'tomUsd');
+            setupEditableValue('ccCashbackValue', 'ccCashback');
+            setupEditableValue('tomThisValue', 'tomCashbackThis');
+            setupEditableValue('tomFutureValue', 'tomCashbackFuture');
+            
+            // Initialize mirror classes for formula values
+            document.querySelectorAll('.priceValue').forEach(el => {
+                if (el.id !== 'priceValue') {
+                    el.textContent = document.getElementById('priceValue').textContent;
+                }
+            });
+            document.querySelectorAll('.ccCashbackValue').forEach(el => {
+                if (el.id !== 'ccCashbackValue') {
+                    el.textContent = document.getElementById('ccCashbackValue').textContent;
+                }
+            });
+            document.querySelectorAll('.tomThisValue').forEach(el => {
+                if (el.id !== 'tomThisValue') {
+                    el.textContent = document.getElementById('tomThisValue').textContent;
+                }
+            });
+        });
+    </script>
 </body>
 </html>
 
