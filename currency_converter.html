@@ -153,6 +153,7 @@
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.12.0/math.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 </head>
 <body>
     <div class="main-container">
@@ -168,10 +169,10 @@
             
             <!-- New Exchange Rate Configuration Table -->
             <div class="config-container">
-                <h3>Current Exchange Rates <small>(click to edit)</small></h3>
+                <h3>Current Visa Exchange Rates <small>(click to edit)</small></h3>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                     <div>1 USD =</div>
-                    <button class="save-btn" onclick="resetToAPIRates()">Reset to API Rates</button>
+                    <button class="save-btn" onclick="resetToAPIRates()">Reset to Visa Rates</button>
                 </div>
                 <table id="ratesTable" style="max-width: 600px; margin: 0 auto;">
                     <thead>
@@ -189,6 +190,9 @@
                         </tr>
                     </tbody>
                 </table>
+                <div style="text-align: center; margin-top: 10px; font-size: 0.9em; color: #666;">
+                    Using Visa's exchange rates instead of real-time market rates to match credit card charges.
+                </div>
             </div>
             
             <div id="calculationResult" style="color: red; text-align: center; margin-bottom: 10px; min-height: 20px;"></div>
@@ -226,7 +230,7 @@
                 <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                     <div>
                         <label>CC Cashback:</label>
-                        <input type="number" id="ccCashback" value="5.25" min="0" max="100" step="0.01" style="width: 80px;" oninput="calculateTOMPrices()"> %
+                        <input type="number" id="ccCashback" value="3" min="0" max="100" step="0.01" style="width: 80px;" oninput="calculateTOMPrices()"> %
                     </div>
                     <div>
                         <label>TOM Cashback (This Product):</label>
@@ -251,15 +255,16 @@
                     <strong>IN Stock:</strong> 
                     <span id="priceValue" class="editable-value" style="color: #2ecc71; font-weight: bold;">$0.00</span> × 
                     (1 - <span id="ccCashbackValue" class="editable-value" style="color: #e74c3c; font-weight: bold;">5.25%</span> - 
-                    <span id="tomThisValue" class="editable-value" style="color: #3498db; font-weight: bold;">25.00%</span>)
+                    (<span id="tomThisValue" class="editable-value" style="color: #3498db; font-weight: bold;">25.00%</span> × 
+                    (1 - <span id="inStockFutureValue" style="color: #9b59b6; font-weight: bold;">5.00%</span>)))
                     = <span id="inStockResult">$0.00</span>
                 </div>
                 <div id="preOrderFormulaContainer" style="margin-top: 10px;">
                     <strong>Pre Order:</strong> 
                     <span class="priceValue editable-value" style="color: #2ecc71; font-weight: bold;">$0.00</span> × 
                     (1 - <span class="ccCashbackValue editable-value" style="color: #e74c3c; font-weight: bold;">5.25%</span> - 
-                    <span class="tomThisValue editable-value" style="color: #3498db; font-weight: bold;">25.00%</span> × 
-                    (1 - <span id="tomFutureValue" class="editable-value" style="color: #9b59b6; font-weight: bold;">25.00%</span>))
+                    (<span class="tomThisValue editable-value" style="color: #3498db; font-weight: bold;">25.00%</span> × 
+                    (1 - <span id="tomFutureValue" class="editable-value" style="color: #9b59b6; font-weight: bold;">25.00%</span>)))
                     = <span id="preOrderResult">$0.00</span>
                 </div>
             </div>
@@ -318,18 +323,77 @@
             evt.currentTarget.classList.add('active');
         }
 
-        // Exchange rate API
+        // Visa Exchange rate API
         async function fetchRates() {
             try {
-                const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-                const data = await response.json();
-                rates = data.rates;
+                const todayDate = new Date();
+                const formattedDate = `${(todayDate.getMonth() + 1).toString().padStart(2, '0')}/${todayDate.getDate().toString().padStart(2, '0')}/${todayDate.getFullYear()}`;
+                
+                // Create a map to store our results
+                const results = {};
+                const currencies = ['CNY', 'HKD', 'JPY'];
+                
+                // Note: Calling Visa API directly might cause CORS issues in browser environment
+                // In a production app, you might need to use a backend proxy or CORS-anywhere service
+                
+                // Fetch exchange rates for each currency
+                const promises = currencies.map(async (currency) => {
+                    const url = "https://usa.visa.com/cmsapi/fx/rates";
+                    const params = {
+                        amount: 1,
+                        fee: 0,
+                        utcConvertedDate: formattedDate,
+                        exchangedate: formattedDate,
+                        fromCurr: "USD",
+                        toCurr: currency
+                    };
+                    
+                    const headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                        "Accept": "application/json, text/plain, */*",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Origin": "https://usa.visa.com",
+                        "Referer": "https://usa.visa.com/support/consumer/travel-support/exchange-rate-calculator.html",
+                        "Sec-Fetch-Dest": "empty",
+                        "Sec-Fetch-Mode": "cors",
+                        "Sec-Fetch-Site": "same-origin",
+                        "Connection": "keep-alive"
+                    };
+                    
+                    try {
+                        const response = await axios.get(url, { params, headers });
+                        // Visa returns the converted amount for 1 USD to currency
+                        results[currency] = parseFloat(response.data.reverseAmount);
+                        console.log(`1 USD = ${results[currency]} ${currency}`);
+                    } catch (err) {
+                        console.error(`Error fetching ${currency} rate:`, err);
+                        // Fallback values if API call fails
+                        if (currency === 'CNY') results[currency] = 7.2;
+                        else if (currency === 'HKD') results[currency] = 7.8;
+                        else if (currency === 'JPY') results[currency] = 150.0;
+                        
+                        document.getElementById('calculationResult').textContent = 
+                            "CORS error or network issue with Visa API. Using default rates.";
+                    }
+                });
+                
+                try {
+                    // Wait for all API calls to complete
+                    await Promise.all(promises);
+                } catch (error) {
+                    console.error('Error in Promise.all:', error);
+                }
+                
+                // Update the rates
+                rates = { ...results };
+                rates['USD'] = 1; // Add USD as reference
                 updateRatesDisplay();
-                return data.rates;
+                return rates;
             } catch (error) {
                 console.error('Error fetching exchange rates:', error);
-                document.getElementById('calculationResult').textContent = "Error fetching exchange rates. Using default values.";
-                rates = { 'CNY': 7.2, 'HKD': 7.8, 'JPY': 150.0 };
+                document.getElementById('calculationResult').textContent = 
+                    "Error fetching Visa exchange rates. Using default values.";
+                rates = { 'CNY': 7.2, 'HKD': 7.8, 'JPY': 150.0, 'USD': 1 };
                 updateRatesDisplay();
                 return rates;
             }
@@ -350,20 +414,21 @@
         // Reset to API rates
         function resetToAPIRates() {
             usingManualRates = false;
-            updateRatesDisplay();
-            document.getElementById('calculationResult').textContent = "Reset to API exchange rates.";
-            
-            // Recalculate with current input if any
-            const activeInput = ['usd', 'rmb', 'hkd', 'yen'].find(id => document.getElementById(id).value);
-            if (activeInput) {
-                const currencyMap = {
-                    'usd': 'USD',
-                    'rmb': 'CNY',
-                    'hkd': 'HKD',
-                    'yen': 'JPY'
-                };
-                convertCurrency(currencyMap[activeInput]);
-            }
+            fetchRates().then(() => {
+                document.getElementById('calculationResult').textContent = "Reset to Visa exchange rates.";
+                
+                // Recalculate with current input if any
+                const activeInput = ['usd', 'rmb', 'hkd', 'yen'].find(id => document.getElementById(id).value);
+                if (activeInput) {
+                    const currencyMap = {
+                        'usd': 'USD',
+                        'rmb': 'CNY',
+                        'hkd': 'HKD',
+                        'yen': 'JPY'
+                    };
+                    convertCurrency(currencyMap[activeInput]);
+                }
+            });
         }
         
         // Setup editable rates
@@ -409,7 +474,7 @@
                 originalEl.textContent = newRate.toFixed(4);
                 
                 document.getElementById('calculationResult').textContent = 
-                    `Updated ${currency} rate to ${newRate.toFixed(4)}. Using manual rates.`;
+                    `Updated ${currency} rate to ${newRate.toFixed(4)}. Using manual rates instead of Visa rates.`;
                 
                 // Recalculate if needed
                 const activeInput = ['usd', 'rmb', 'hkd', 'yen'].find(id => document.getElementById(id).value);
@@ -541,6 +606,7 @@
                 const ccCashback = parseFloat(document.getElementById('ccCashback').value) / 100;
                 const tomCashbackThis = parseFloat(document.getElementById('tomCashbackThis').value) / 100;
                 const tomCashbackFuture = parseFloat(document.getElementById('tomCashbackFuture').value) / 100;
+                const inStockFutureCashback = 0.05; // Hardcoded 5% future cashback for in-stock items
                 
                 // Get and evaluate product price
                 let productPrice = 0;
@@ -554,9 +620,9 @@
                 
                 // Calculate prices
                 const preOrderPrice = productPrice * (1 - ccCashback - (tomCashbackThis * (1 - tomCashbackFuture)));
-                const inStockPrice = productPrice * (1 - ccCashback - tomCashbackThis);
+                const inStockPrice = productPrice * (1 - ccCashback - (tomCashbackThis * (1 - inStockFutureCashback)));
                 
-                // Update the results table with current rates
+                // Update the results table with current rates (Visa or manual)
                 updateTOMResultsTable(inStockPrice, preOrderPrice, currentRates);
                 
                 // Show calculation if input is an expression
@@ -567,7 +633,7 @@
                 }
                 
                 // Update the formula display
-                updateFormulaDisplay(productPrice, ccCashback, tomCashbackThis, tomCashbackFuture, inStockPrice, preOrderPrice);
+                updateFormulaDisplay(productPrice, ccCashback, tomCashbackThis, tomCashbackFuture, inStockFutureCashback, inStockPrice, preOrderPrice);
                 
             } catch (e) {
                 resultDisplay.textContent = "Invalid expression";
@@ -594,7 +660,7 @@
             });
         }
         
-        function updateFormulaDisplay(price, ccCashback, tomCashbackThis, tomCashbackFuture, inStockPrice, preOrderPrice) {
+        function updateFormulaDisplay(price, ccCashback, tomCashbackThis, tomCashbackFuture, inStockFutureCashback, inStockPrice, preOrderPrice) {
             // Update price displays
             document.getElementById('priceValue').textContent = '$' + price.toFixed(2);
             document.querySelectorAll('.priceValue').forEach(el => {
@@ -613,6 +679,7 @@
             });
             
             document.getElementById('tomFutureValue').textContent = (tomCashbackFuture * 100).toFixed(2) + '%';
+            document.getElementById('inStockFutureValue').textContent = (inStockFutureCashback * 100).toFixed(2) + '%';
             
             // Update formula results
             document.getElementById('inStockResult').textContent = '$' + inStockPrice.toFixed(2);
@@ -695,7 +762,12 @@
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize exchange rates
-            fetchRates();
+            fetchRates().then(() => {
+                document.getElementById('calculationResult').textContent = "Using Visa exchange rates for currency conversion.";
+                setTimeout(() => {
+                    document.getElementById('calculationResult').textContent = "";
+                }, 3000);
+            });
             
             // Set up editable rates
             setupEditableRates();
