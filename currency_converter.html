@@ -344,8 +344,8 @@
                         fee: 0,
                         utcConvertedDate: formattedDate,
                         exchangedate: formattedDate,
-                        fromCurr: "USD",
-                        toCurr: currency
+                        fromCurr: currency,
+                        toCurr: "USD"
                     };
                     
                     const headers = {
@@ -363,7 +363,7 @@
                     try {
                         const response = await axios.get(url, { params, headers });
                         // Visa returns the converted amount for 1 USD to currency
-                        results[currency] = parseFloat(response.data.reverseAmount);
+                        results[currency] = parseFloat(response.data.fxRateWithAdditionalFee);
                         console.log(`1 USD = ${results[currency]} ${currency}`);
                     } catch (err) {
                         console.error(`Error fetching ${currency} rate:`, err);
