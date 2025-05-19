@@ -151,6 +151,33 @@
         .editable-value:hover {
             box-shadow: 0 0 2px rgba(0,0,0,0.3);
         }
+        
+        /* Add styles for locked rate fields */
+        .editable-rate {
+            padding: 3px 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .editable-rate:hover {
+            background-color: rgba(76, 175, 80, 0.1);
+        }
+        
+        .locked-rate {
+            background-color: #f0f0f0;
+            color: #666;
+            cursor: not-allowed;
+            padding: 3px 5px;
+            border-radius: 3px;
+        }
+        
+        .rate-locked-indicator {
+            color: #e74c3c;
+            font-size: 0.9em;
+            margin-top: 5px;
+            display: none;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.12.0/math.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
@@ -192,6 +219,9 @@
                 </table>
                 <div style="text-align: center; margin-top: 10px; font-size: 0.9em; color: #666;">
                     Using Visa's exchange rates instead of real-time market rates to match credit card charges.
+                </div>
+                <div id="rateLockedIndicator" class="rate-locked-indicator" style="text-align: center;">
+                    <i>Rates are locked. Click "Reset to Visa Rates" to unlock and edit other rates.</i>
                 </div>
             </div>
             
@@ -302,7 +332,9 @@
     </div>
 
     <script>
-        // Global variables
+        // ==============================================
+        // CONSTANTS AND GLOBAL STATE
+        // ==============================================
         const CURRENCY_SYMBOLS = {
             'USD': '$',
             'CNY': '¥',
@@ -310,9 +342,29 @@
             'JPY': '¥'
         };
         
+        const CURRENCY_TO_INPUT_MAP = {
+            'USD': 'usd',
+            'CNY': 'rmb',
+            'HKD': 'hkd',
+            'JPY': 'yen'
+        };
+        
+        const INPUT_TO_CURRENCY_MAP = {
+            'usd': 'USD',
+            'rmb': 'CNY',
+            'hkd': 'HKD',
+            'yen': 'JPY'
+        };
+        
+        // Application state
         let rates = {};
         let manualRates = {};
         let usingManualRates = false;
+        let lastEditedRateCurrency = null;
+        
+        // ==============================================
+        // UI CONTROL FUNCTIONS
+        // ==============================================
         
         // Tab functionality
         function openTab(evt, tabName) {
@@ -323,20 +375,20 @@
             evt.currentTarget.classList.add('active');
         }
 
-        // Visa Exchange rate API
+        // ==============================================
+        // EXCHANGE RATE FUNCTIONS
+        // ==============================================
+        
+        // Fetch current Visa exchange rates
         async function fetchRates() {
             try {
                 const todayDate = new Date();
                 const formattedDate = `${(todayDate.getMonth() + 1).toString().padStart(2, '0')}/${todayDate.getDate().toString().padStart(2, '0')}/${todayDate.getFullYear()}`;
                 
-                // Create a map to store our results
                 const results = {};
                 const currencies = ['CNY', 'HKD', 'JPY'];
                 
-                // Note: Calling Visa API directly might cause CORS issues in browser environment
-                // In a production app, you might need to use a backend proxy or CORS-anywhere service
-                
-                // Fetch exchange rates for each currency
+                // Fetch each currency rate in parallel
                 const promises = currencies.map(async (currency) => {
                     const url = "https://usa.visa.com/cmsapi/fx/rates";
                     const params = {
@@ -344,8 +396,8 @@
                         fee: 0,
                         utcConvertedDate: formattedDate,
                         exchangedate: formattedDate,
-                        fromCurr: currency,
-                        toCurr: "USD"
+                        fromCurr: "USD",
+                        toCurr: currency
                     };
                     
                     const headers = {
@@ -362,15 +414,13 @@
                     
                     try {
                         const response = await axios.get(url, { params, headers });
-                        // Visa returns the converted amount for 1 USD to currency
-                        results[currency] = parseFloat(response.data.fxRateWithAdditionalFee);
+                        results[currency] = parseFloat(response.data.reverseAmount);
                         console.log(`1 USD = ${results[currency]} ${currency}`);
                     } catch (err) {
                         console.error(`Error fetching ${currency} rate:`, err);
                         // Fallback values if API call fails
-                        if (currency === 'CNY') results[currency] = 7.2;
-                        else if (currency === 'HKD') results[currency] = 7.8;
-                        else if (currency === 'JPY') results[currency] = 150.0;
+                        results[currency] = currency === 'CNY' ? 7.2 : 
+                                          currency === 'HKD' ? 7.8 : 150.0; // JPY
                         
                         document.getElementById('calculationResult').textContent = 
                             "CORS error or network issue with Visa API. Using default rates.";
@@ -378,15 +428,12 @@
                 });
                 
                 try {
-                    // Wait for all API calls to complete
                     await Promise.all(promises);
                 } catch (error) {
                     console.error('Error in Promise.all:', error);
                 }
                 
-                // Update the rates
-                rates = { ...results };
-                rates['USD'] = 1; // Add USD as reference
+                rates = { ...results, 'USD': 1 };
                 updateRatesDisplay();
                 return rates;
             } catch (error) {
@@ -403,42 +450,63 @@
         function updateRatesDisplay() {
             const displayRates = usingManualRates ? manualRates : rates;
             
-            document.querySelectorAll('.editable-rate').forEach(el => {
-                const currency = el.getAttribute('data-currency');
+            document.querySelectorAll('.editable-rate, .locked-rate').forEach(el => {
+                const currency = el.getAttribute('data-currency') || el.getAttribute('data-original-currency');
                 if (displayRates[currency]) {
                     el.textContent = displayRates[currency].toFixed(4);
                 }
             });
+            
+            // Show/hide locked indicator
+            document.getElementById('rateLockedIndicator').style.display = 
+                usingManualRates ? 'block' : 'none';
+            
+            // Update rate cell styles
+            updateRateCellStyles();
         }
         
-        // Reset to API rates
-        function resetToAPIRates() {
-            usingManualRates = false;
-            fetchRates().then(() => {
-                document.getElementById('calculationResult').textContent = "Reset to Visa exchange rates.";
-                
-                // Recalculate with current input if any
-                const activeInput = ['usd', 'rmb', 'hkd', 'yen'].find(id => document.getElementById(id).value);
-                if (activeInput) {
-                    const currencyMap = {
-                        'usd': 'USD',
-                        'rmb': 'CNY',
-                        'hkd': 'HKD',
-                        'yen': 'JPY'
-                    };
-                    convertCurrency(currencyMap[activeInput]);
+        // Update rate cell styles based on locked status
+        function updateRateCellStyles() {
+            document.querySelectorAll('.editable-rate, .locked-rate').forEach(el => {
+                if (usingManualRates) {
+                    // Convert to locked style
+                    el.className = 'locked-rate';
+                    el.title = 'Rate locked. Click "Reset to Visa Rates" to unlock.';
+                } else {
+                    // Convert to editable style
+                    el.className = 'editable-rate';
+                    el.title = 'Click to edit rate';
+                    
+                    // Restore data-currency attribute if needed
+                    if (!el.hasAttribute('data-currency')) {
+                        const currency = el.getAttribute('data-original-currency');
+                        if (currency) {
+                            el.setAttribute('data-currency', currency);
+                        }
+                    }
                 }
             });
         }
         
-        // Setup editable rates
+        // Setup rate editing functionality
         function setupEditableRates() {
             document.querySelectorAll('.editable-rate').forEach(el => {
+                // Store original currency for reference
+                const currency = el.getAttribute('data-currency');
+                el.setAttribute('data-original-currency', currency);
+                
                 el.addEventListener('click', function() {
-                    const currency = this.getAttribute('data-currency');
-                    const currentValue = usingManualRates && manualRates[currency] ? 
-                        manualRates[currency] : rates[currency];
+                    // Only allow editing if rates are not manually set (locked)
+                    if (usingManualRates) {
+                        document.getElementById('calculationResult').textContent = 
+                            "Rates are locked. Click 'Reset to Visa Rates' to unlock.";
+                        return;
+                    }
                     
+                    const currency = this.getAttribute('data-currency');
+                    const currentValue = rates[currency];
+                    
+                    // Create temporary input for editing
                     const tempInput = document.createElement('input');
                     tempInput.type = 'number';
                     tempInput.step = '0.0001';
@@ -461,91 +529,239 @@
             });
         }
         
+        // Process rate input and update display
         function updateRateFromInput(input, originalEl, currency) {
             const newRate = parseFloat(input.value);
             if (!isNaN(newRate) && newRate > 0) {
+                // Initialize manual rates from API rates if first edit
                 if (!usingManualRates) {
-                    // First time editing, initialize manual rates from API rates
                     manualRates = {...rates};
                     usingManualRates = true;
                 }
                 
+                // Track which currency rate was last edited
+                lastEditedRateCurrency = currency;
+                
+                // Update rate and display
                 manualRates[currency] = newRate;
                 originalEl.textContent = newRate.toFixed(4);
-                
                 document.getElementById('calculationResult').textContent = 
-                    `Updated ${currency} rate to ${newRate.toFixed(4)}. Using manual rates instead of Visa rates.`;
+                    `Updated ${currency} rate to ${newRate.toFixed(4)}. All rates are now locked.`;
                 
-                // Recalculate if needed
-                const activeInput = ['usd', 'rmb', 'hkd', 'yen'].find(id => document.getElementById(id).value);
-                if (activeInput) {
-                    const currencyMap = {
-                        'usd': 'USD',
-                        'rmb': 'CNY',
-                        'hkd': 'HKD',
-                        'yen': 'JPY'
-                    };
-                    convertCurrency(currencyMap[activeInput]);
-                }
+                // Lock all rate cells
+                updateRateCellStyles();
+                
+                // Handle currency conversion with the new rate
+                performConversionWithNewRate(currency);
             } else {
-                originalEl.textContent = (usingManualRates && manualRates[currency] ? 
-                    manualRates[currency] : rates[currency]).toFixed(4);
+                // Restore original on invalid input
+                originalEl.textContent = (usingManualRates ? manualRates[currency] : rates[currency]).toFixed(4);
                 document.getElementById('calculationResult').textContent = "Invalid rate entered.";
             }
             
+            // Replace the input with the original element
             input.parentNode.replaceChild(originalEl, input);
         }
+        
+        // Perform conversion after rate change
+        function performConversionWithNewRate(currency) {
+            // Get input values
+            const inputIds = CURRENCY_TO_INPUT_MAP;
+            const inputElement = document.getElementById(inputIds[currency]);
+            
+            // If the currency whose rate changed has a value, use that for conversion
+            if (inputElement.value && inputElement.value.trim() !== '') {
+                convertCurrency(currency);
+                return;
+            }
+            
+            // Otherwise find any foreign currency with a value to keep fixed
+            for (const curr of ['CNY', 'HKD', 'JPY']) {
+                const el = document.getElementById(CURRENCY_TO_INPUT_MAP[curr]);
+                if (el.value && el.value.trim() !== '') {
+                    convertCurrency(curr);
+                    return;
+                }
+            }
+            
+            // If no foreign currency has a value, use USD if available
+            const usdElement = document.getElementById('usd');
+            if (usdElement.value && usdElement.value.trim() !== '') {
+                convertCurrency('USD');
+            }
+        }
+        
+        // Reset to API rates
+        function resetToAPIRates() {
+            // 1. Identify which currency value to keep fixed
+            const inputValues = {
+                'USD': document.getElementById('usd').value,
+                'CNY': document.getElementById('rmb').value,
+                'HKD': document.getElementById('hkd').value,
+                'JPY': document.getElementById('yen').value
+            };
+            
+            let fixedCurrency = null;
+            let fixedInputId = null;
+            let fixedValue = null;
+            
+            // First check if we have a value for the last edited rate currency
+            if (lastEditedRateCurrency && 
+                inputValues[lastEditedRateCurrency] && 
+                inputValues[lastEditedRateCurrency].trim() !== '') {
+                fixedCurrency = lastEditedRateCurrency;
+                fixedInputId = CURRENCY_TO_INPUT_MAP[lastEditedRateCurrency];
+                fixedValue = inputValues[lastEditedRateCurrency];
+            } else {
+                // Check all inputs to find any with values
+                const inputsWithValues = [];
+                
+                for (const [currency, value] of Object.entries(inputValues)) {
+                    if (value && value.trim() !== '') {
+                        inputsWithValues.push({
+                            currency,
+                            id: CURRENCY_TO_INPUT_MAP[currency],
+                            value
+                        });
+                    }
+                }
+                
+                // If we have any inputs with values, use the first one
+                if (inputsWithValues.length > 0) {
+                    fixedCurrency = inputsWithValues[0].currency;
+                    fixedInputId = inputsWithValues[0].id;
+                    fixedValue = inputsWithValues[0].value;
+                }
+            }
+            
+            // 2. IMMEDIATELY update UI to clear all fields except fixed one
+            for (const id of Object.values(CURRENCY_TO_INPUT_MAP)) {
+                if (id !== fixedInputId) {
+                    document.getElementById(id).value = '';
+                }
+            }
+            
+            // 3. Reset rate state
+            usingManualRates = false;
+            updateRateCellStyles();
+            lastEditedRateCurrency = null;
+            
+            // 4. API call and post-processing
+            if (!fixedCurrency) {
+                fetchRates().then(() => {
+                    document.getElementById('calculationResult').textContent = 
+                        "Reset to Visa exchange rates. All rates are now editable.";
+                });
+                return;
+            }
+            
+            // With fixed value, fetch rates and then convert
+            document.getElementById('calculationResult').textContent = 
+                `Resetting rates, keeping ${fixedCurrency} fixed...`;
+                
+            fetchRates().then(() => {
+                document.getElementById('calculationResult').textContent = 
+                    `Reset to Visa exchange rates. Keeping ${fixedCurrency} fixed at ${fixedValue}.`;
+                
+                // Ensure fixed value is preserved
+                document.getElementById(fixedInputId).value = fixedValue;
+                
+                // Perform conversion
+                convertCurrency(fixedCurrency);
+            }).catch(err => {
+                console.error("Error fetching rates:", err);
+                document.getElementById('calculationResult').textContent = 
+                    "Error resetting rates. Please try again.";
+            });
+        }
 
-        // Currency converter functions
+        // ==============================================
+        // CURRENCY CONVERSION FUNCTIONS
+        // ==============================================
+        
+        // Main currency conversion function
         async function convertCurrency(currency) {
+            // Ensure rates are loaded
             if (Object.keys(rates).length === 0) {
                 await fetchRates();
             }
 
-            const inputs = {
-                'USD': document.getElementById('usd'),
-                'CNY': document.getElementById('rmb'),
-                'HKD': document.getElementById('hkd'),
-                'JPY': document.getElementById('yen')
-            };
+            // Get input elements
+            const inputs = {};
+            for (const [curr, id] of Object.entries(CURRENCY_TO_INPUT_MAP)) {
+                inputs[curr] = document.getElementById(id);
+            }
             
             const resultDisplay = document.getElementById('calculationResult');
             const sourceInput = inputs[currency];
             const currentRates = usingManualRates ? manualRates : rates;
 
             try {
-                // Parse and evaluate the input value
-                const sourceValue = math.evaluate(sourceInput.value.replace(/,/g, ''));
+                // Handle empty input
+                if (!sourceInput.value || sourceInput.value.trim() === '') {
+                    Object.values(inputs).forEach(input => input.value = '');
+                    resultDisplay.textContent = '';
+                    return;
+                }
                 
-                if (isNaN(sourceValue)) {
+                // Save original value to preserve exact format
+                const originalValue = sourceInput.value;
+                
+                // Parse input value
+                const sourceValue = math.evaluate(originalValue.replace(/,/g, ''));
+                
+                if (isNaN(sourceValue) || sourceValue <= 0) {
                     throw new Error('Invalid number');
                 }
                 
-                // Show calculation result if it's an expression
-                if (sourceInput.value.match(/[+\-*/]/)) {
-                    resultDisplay.textContent = `${sourceInput.value} = ${CURRENCY_SYMBOLS[currency]}${sourceValue.toFixed(2)} ${currency}`;
-                } else {
-                    resultDisplay.textContent = '';
+                // Show calculation result for expressions
+                if (originalValue.match(/[+\-*/]/)) {
+                    resultDisplay.textContent = `${originalValue} = ${CURRENCY_SYMBOLS[currency]}${sourceValue.toFixed(2)} ${currency}`;
                 }
                 
-                // Convert to all other currencies
-                Object.keys(inputs).forEach(targetCurrency => {
-                    if (targetCurrency === currency) return;
+                // Clear all inputs except source to prevent flickering
+                for (const [curr, input] of Object.entries(inputs)) {
+                    if (curr !== currency) {
+                        input.value = '';
+                    }
+                }
+                
+                // CORE CONVERSION LOGIC
+                if (currency === 'USD') {
+                    // USD to foreign currencies
+                    for (const targetCurrency of ['CNY', 'HKD', 'JPY']) {
+                        inputs[targetCurrency].value = (sourceValue * currentRates[targetCurrency]).toFixed(2);
+                    }
+                } else {
+                    // Foreign currency to USD first
+                    const usdValue = sourceValue / currentRates[currency];
+                    inputs['USD'].value = usdValue.toFixed(2);
                     
-                    const convertedValue = currency === 'USD' 
-                        ? sourceValue * currentRates[targetCurrency]
-                        : targetCurrency === 'USD'
-                            ? sourceValue / currentRates[currency]
-                            : sourceValue * (currentRates[targetCurrency] / currentRates[currency]);
-                            
-                    inputs[targetCurrency].value = convertedValue.toFixed(2);
-                });
+                    // USD to other foreign currencies
+                    for (const targetCurrency of ['CNY', 'HKD', 'JPY']) {
+                        if (targetCurrency !== currency) {
+                            inputs[targetCurrency].value = (usdValue * currentRates[targetCurrency]).toFixed(2);
+                        }
+                    }
+                }
+                
+                // Ensure original value is preserved exactly
+                sourceInput.value = originalValue;
                 
             } catch (e) {
+                console.error("Conversion error:", e);
                 resultDisplay.textContent = "Invalid expression";
+                
+                // Clear other fields on error
+                for (const [curr, input] of Object.entries(inputs)) {
+                    if (curr !== currency) {
+                        input.value = '';
+                    }
+                }
             }
         }
 
+        // Save current conversion to table
         function saveCurrentConversion() {
             const inputs = {
                 'usd': document.getElementById('usd').value,
@@ -566,14 +782,14 @@
             ['usd', 'rmb', 'hkd', 'yen'].forEach(field => {
                 const cell = newRow.insertCell();
                 try {
-                    if (inputs[field].match(/[+\-*/]/)) {
+                    if (inputs[field] && inputs[field].match(/[+\-*/]/)) {
                         const result = math.evaluate(inputs[field].replace(/,/g, ''));
                         cell.textContent = result.toFixed(2);
                     } else {
-                        cell.textContent = inputs[field];
+                        cell.textContent = inputs[field] || '';
                     }
                 } catch (e) {
-                    cell.textContent = inputs[field]; // Use original if evaluation fails
+                    cell.textContent = inputs[field] || ''; // Use original if evaluation fails
                 }
             });
 
@@ -585,17 +801,20 @@
             document.getElementById('calculationResult').textContent = '';
         }
 
-        // TOM Calculator Functions
+        // ==============================================
+        // TOM CALCULATOR FUNCTIONS
+        // ==============================================
+        
+        // Calculate TOM prices
         function calculateTOMPrices() {
             if (Object.keys(rates).length === 0) {
-                fetchRates().then(r => {
-                    performTOMCalculation();
-                });
+                fetchRates().then(() => performTOMCalculation());
             } else {
                 performTOMCalculation();
             }
         }
 
+        // Perform TOM calculation after rates are available
         function performTOMCalculation() {
             const tomUsdInput = document.getElementById('tomUsd');
             const resultDisplay = document.getElementById('tomCalculationResult');
@@ -606,7 +825,7 @@
                 const ccCashback = parseFloat(document.getElementById('ccCashback').value) / 100;
                 const tomCashbackThis = parseFloat(document.getElementById('tomCashbackThis').value) / 100;
                 const tomCashbackFuture = parseFloat(document.getElementById('tomCashbackFuture').value) / 100;
-                const inStockFutureCashback = 0.05; // Hardcoded 5% future cashback for in-stock items
+                const inStockFutureCashback = 0.05; // Fixed 5% future cashback for in-stock items
                 
                 // Get and evaluate product price
                 let productPrice = 0;
@@ -618,28 +837,30 @@
                     throw new Error('Invalid product price');
                 }
                 
-                // Calculate prices
+                // Calculate prices with different cashback scenarios
                 const preOrderPrice = productPrice * (1 - ccCashback - (tomCashbackThis * (1 - tomCashbackFuture)));
                 const inStockPrice = productPrice * (1 - ccCashback - (tomCashbackThis * (1 - inStockFutureCashback)));
                 
-                // Update the results table with current rates (Visa or manual)
+                // Update UI with results
                 updateTOMResultsTable(inStockPrice, preOrderPrice, currentRates);
                 
-                // Show calculation if input is an expression
+                // Show calculation for expressions
                 if (tomUsdInput.value.match(/[+\-*/]/)) {
                     resultDisplay.textContent = `${tomUsdInput.value} = $${productPrice.toFixed(2)} USD`;
                 } else {
                     resultDisplay.textContent = '';
                 }
                 
-                // Update the formula display
-                updateFormulaDisplay(productPrice, ccCashback, tomCashbackThis, tomCashbackFuture, inStockFutureCashback, inStockPrice, preOrderPrice);
+                // Update formula display
+                updateFormulaDisplay(productPrice, ccCashback, tomCashbackThis, tomCashbackFuture, 
+                                    inStockFutureCashback, inStockPrice, preOrderPrice);
                 
             } catch (e) {
                 resultDisplay.textContent = "Invalid expression";
             }
         }
         
+        // Update TOM results table with calculated prices
         function updateTOMResultsTable(inStockPrice, preOrderPrice, currentRates) {
             // Update USD values
             document.getElementById('inStockUsd').textContent = '$' + inStockPrice.toFixed(2);
@@ -660,7 +881,9 @@
             });
         }
         
-        function updateFormulaDisplay(price, ccCashback, tomCashbackThis, tomCashbackFuture, inStockFutureCashback, inStockPrice, preOrderPrice) {
+        // Update the formula display in TOM calculator
+        function updateFormulaDisplay(price, ccCashback, tomCashbackThis, tomCashbackFuture, 
+                                     inStockFutureCashback, inStockPrice, preOrderPrice) {
             // Update price displays
             document.getElementById('priceValue').textContent = '$' + price.toFixed(2);
             document.querySelectorAll('.priceValue').forEach(el => {
@@ -686,7 +909,7 @@
             document.getElementById('preOrderResult').textContent = '$' + preOrderPrice.toFixed(2);
         }
         
-        // Editable values in formulas
+        // Set up editable values in formulas
         function setupEditableValue(spanId, inputId) {
             const span = document.getElementById(spanId);
             
@@ -722,6 +945,7 @@
             });
         }
         
+        // Update formula values from input
         function updateValueFromTempInput(tempInput, originalSpan, inputId) {
             try {
                 const value = tempInput.type === 'text' ? 
@@ -759,7 +983,9 @@
             tempInput.parentNode.replaceChild(originalSpan, tempInput);
         }
 
-        // Initialize on page load
+        // ==============================================
+        // INITIALIZATION
+        // ==============================================
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize exchange rates
             fetchRates().then(() => {
@@ -769,10 +995,10 @@
                 }, 3000);
             });
             
-            // Set up editable rates
+            // Set up UI interaction handlers
             setupEditableRates();
             
-            // Set up editable values in formulas
+            // Set up TOM calculator editable values
             setupEditableValue('priceValue', 'tomUsd');
             setupEditableValue('ccCashbackValue', 'ccCashback');
             setupEditableValue('tomThisValue', 'tomCashbackThis');
