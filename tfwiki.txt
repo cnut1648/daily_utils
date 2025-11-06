@@ -1,0 +1,13 @@
+Read the tfwiki page at https://tfwiki.net/wiki/The_Transformers:_Robots_in_Disguise
+.
+Specifically read the issue from #6 to #15. You can get each issues' url from the above page. Fetch those urls in parallel.
+You need to visit each of them, and write a one-paragraph summary of the story. Please pay attention to the following:
+1) The story should be written in Chinese but the charaters' name should be in English. 
+2) Ensure the story is complete and coherent, focus on what actually happened (A sees B to ask C, A fights boss etc) rather than high level understanding (lays down the overall picture of how Cybertronians fight and the overall picture of how the war is going on etc). But you are allowed to give certain philosophical insights if you think it is necessary. 
+3) Include enough background or context to make the story self-contained. 
+4) It should be moderately long, but don't write every action/dialogue in detail, you should know how to make the summary concise and readable.
+5) Read each issues' content from the issue's url, optionally each of the hyperlinks in those pages to ensure you get the complete picture and whole context.
+Example:
+> All Hail Megatron事件三年后，地球已经重建，但不信任变形金刚的人类开始捕杀变形金刚。Autobot被迫躲藏。Skywatch的Spike Witwicky命令部队使用从塞伯坦技术制造的装甲战斗服抓捕Decepticon Breakdown，当致命的粒子炮准备摧毁这个Decepticon时，Prowl变形介入阻止，但这正是Spike设置的陷阱，他的真实目标是引出Prowl并将其俘获。在Autobot基地，Wheeljack正在设计对抗抑制器的反制措施，而Hot Rod公开质疑Optimus Prime的领导能力，特别是他们留在地球的决定以及随之而来的损失，因为越来越多的同伴被捕获。Breakdown被Skywatch控制人员用装甲抗坠服攻击并被制服，Prowl和Streetwise在现场的人类警察中观察着Breakdown被制动化。All Hail Megatron时代的新现状，Autobot分散隐藏，既要躲避Decepticon威胁，又要面对人类武装力量的追捕，标志着变形金刚与人类关系进入了新的复杂阶段。
+
+First give each individual issue a one-paragraph summary in issue_<issue_number>.txt, then combine them into a complete story in tfwiki_summary.txt.
